@@ -40,7 +40,7 @@ def _make_plot_file(tmp_path, n=6, include_bad_row=False):
         conv = [-3.0, 3.5] + [m_total] * 10
         lines.append(_row(model, age, m_total, 0.0, 0.5, conv))
     if include_bad_row:
-        # SPEC.md illegal example: [3.0, -5.0, 7.0] admits no legal walk.
+        # [3.0, -5.0, 7.0] admits no legal rad/semi/conv walk.
         bad_conv = [3.0, -5.0, 7.0] + [m_total] * 9
         lines.append(_row(n + 1, 100.0 * (n + 1), m_total, 0.0, 0.5, bad_conv))
     path = tmp_path / "plot.synthetic"

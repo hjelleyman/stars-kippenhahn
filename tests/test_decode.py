@@ -1,14 +1,11 @@
 """Tests for kipp.decode, written before the implementation (TDD).
 
-Every worked example from SPEC.md's "decode.py" section is encoded here as a
-test, plus additional coverage for padding-boundary precision, zero-width
-interval dropping, sort order, Interval immutability, and decode_all's
-error-handling contract.
-
-Note: the third worked example in SPEC.md ("post-MS row") contains an
-arithmetic slip about which entries count as padding. The corrected version
-(none of the 19.8x entries are padding at eps=1e-4) is what's encoded below;
-see the comment on test_post_ms_row for the full derivation.
+The first group are worked examples: real rows from the sample plot file
+(ZAMS, TAMS, post-MS) decoded by hand from the STARS manual's sign
+convention, plus small synthetic rows covering each branch of the state
+machine. Then padding-boundary precision, zero-width interval dropping, sort
+order, Interval immutability, decode_all's error-handling contract, tie
+handling, and truncation.
 """
 import dataclasses
 import numpy as np
@@ -19,7 +16,7 @@ from kipp.decode import Interval, DecodeError, decode_row, decode_all
 
 
 def test_zams_row():
-    # SPEC.md example 1.
+    # Worked example 1:
     values = [
         0.00064, -0.00064, 9.01792, -8.96118,
         20.73143, -20.73143, 20.73143, -20.73143,
@@ -34,7 +31,7 @@ def test_zams_row():
 
 
 def test_tams_row():
-    # SPEC.md example 2: purely two real boundaries, rest padding.
+    # Worked example 2: purely two real boundaries, rest padding.
     values = [2.19412, 3.11245, 19.85237, -19.85237, 0, 0, 0, 0, 0, 0, 0, 0]
     m_total = 19.8524
     result = decode_row(values, m_total)
@@ -42,7 +39,7 @@ def test_tams_row():
 
 
 def test_post_ms_row():
-    # SPEC.md example 3, corrected: with eps=1e-4 and M=19.83848, NONE of the
+    # Worked example 3: corrected: with eps=1e-4 and M=19.83848, NONE of the
     # 19.8x entries are padding (19.83684 is only 0.00164 below M, which is
     # well outside eps). Sorted abs values after +10.10233 are
     # +19.82018, -19.82024, -19.83681, +19.83684, giving an extra
@@ -80,7 +77,7 @@ def test_all_padding_row_at_surface():
 
 
 def test_ambiguous_conv_or_semi_prefers_conv():
-    # SPEC.md example 5.
+    # Worked example 5:
     values = [-3.0, -5.0] + [0.0] * 10
     m_total = 100.0
     result = decode_row(values, m_total, prefer="conv")
@@ -103,7 +100,7 @@ def test_ambiguous_conv_or_semi_prefers_semi():
 
 
 def test_unambiguous_conv_start():
-    # SPEC.md example 6: sign pattern -,+ forces start=conv (rad is illegal
+    # Worked example 6: sign pattern -,+ forces start=conv (rad is illegal
     # after a leading '-', and conv is the only legal start left after
     # walking the full sequence).
     values = [-3.0, 5.0] + [0.0] * 10
@@ -116,7 +113,7 @@ def test_unambiguous_conv_start():
 
 
 def test_all_plus_prefers_rad_start():
-    # SPEC.md example 7: three '+' boundaries. Both rad and semi starts are
+    # Worked example 7: three '+' boundaries. Both rad and semi starts are
     # legal (an all-'+' sequence never touches conv), but rad is always
     # chosen over semi/conv whenever it is a legal candidate.
     values = [3.0, 5.0, 7.0] + [0.0] * 9
@@ -129,7 +126,7 @@ def test_all_plus_prefers_rad_start():
 
 
 def test_lone_negative_boundary_prefers_conv():
-    # SPEC.md example 8.
+    # Worked example 8:
     values = [-3.0] + [0.0] * 11
     m_total = 100.0
     result = decode_row(values, m_total, prefer="conv")
@@ -150,7 +147,7 @@ def test_lone_negative_boundary_prefers_semi():
 
 
 def test_illegal_sequence_raises_decode_error():
-    # SPEC.md example 9: [3.0, -5.0, 7.0] is illegal from every start state.
+    # Worked example 9: [3.0, -5.0, 7.0] is illegal from every start state.
     values = [3.0, -5.0, 7.0] + [0.0] * 9
     m_total = 100.0
     with pytest.raises(DecodeError):

@@ -21,7 +21,7 @@ from kipp.render import _strictly_increasing, plot_kippenhahn
 # ---------------------------------------------------------------------------
 # Synthetic data fixture
 # ---------------------------------------------------------------------------
-# 6 models, constant total mass 10, conv row built from the SPEC.md decode
+# 6 models, constant total mass 10, conv row built from the decode
 # worked examples so decode_all always yields a conv core plus a semi shell:
 # [-3.0, 3.5, pad(=+-M)...] -> start must be conv (since a '-' boundary while
 # in rad is illegal) -> [conv(0, 3.0), semi(3.0, 3.5)] to... actually with
