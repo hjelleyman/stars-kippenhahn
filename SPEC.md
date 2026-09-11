@@ -101,7 +101,7 @@ Worked examples (must be tests):
   +→rad, −→ILLEGAL. start conv: + ILLEGAL. → raise DecodeError.
 
 ```python
-def decode_all(conv, M, *, eps=1e-4, prefer="conv", on_error="skip") -> tuple[list[list[Interval]], list[int]]
+def decode_all(conv, M, *, conv_env=None, eps=1e-4, prefer="conv", on_error="skip") -> tuple[list[list[Interval]], list[int]]
 ```
 Vectorised-enough loop over rows. `on_error="skip"` → rows that raise get `[]`
 and their row index is appended to the returned `bad_rows` list; `"raise"` →
