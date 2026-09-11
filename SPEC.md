@@ -85,11 +85,10 @@ Worked examples (must be tests):
   → `[Interval(2.19412, 3.11245, "semi")]`
 - `[5.96927, -5.97847, -7.32142, 7.52217, 8.41099, -8.76458, -9.85256, 10.10233, 19.82018, -19.82024, 19.83684, -19.83681]`, M=19.83848
   → semi(5.96927,5.97847), conv(5.97847,7.32142), semi(7.32142,7.52217),
-    semi(8.41099,8.76458), conv(8.76458,9.85256), semi(9.85256,10.10233)
-    (the 19.82 entries are within eps of… NO: 19.82018 is 0.018 below M, that is
-    > eps, so it is a real boundary; 19.83684/19.83681 are within eps → padding.
-    So additionally: semi(19.82018, 19.82024), conv(19.82024, 19.83848) — the
-    conv runs to the surface because the walk ends in state conv.)
+    semi(8.41099,8.76458), conv(8.76458,9.85256), semi(9.85256,10.10233),
+    semi(19.82018,19.82024), conv(19.82024,19.83681), semi(19.83681,19.83684)
+    (none of the 19.8x entries are padding: the closest is 0.0016 below M, well
+    above eps=1e-4. The outermost 0.0016 M☉ is radiative.)
 - all-padding row → `[]`
 - `[-3.0, -5.0, pad...]` (ambiguous: start conv or semi) with prefer="conv"
   → `[conv(0,3), semi(3,5)]`; with prefer="semi" → `[semi(0,3), conv(3,5)]`
