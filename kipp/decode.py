@@ -18,7 +18,7 @@ from dataclasses import dataclass
 from itertools import permutations
 from typing import Iterable, Sequence
 
-__all__ = ["Interval", "DecodeError", "decode_row", "decode_all", "is_truncated"]
+__all__ = ["Interval", "DecodeError", "decode_row", "decode_all", "is_truncated", "unknown_regions"]
 
 _STATES = ("rad", "semi", "conv")
 _SLOTS = 12
@@ -230,3 +230,29 @@ def _restore_envelope(
     if base >= m_total - eps:   # "no envelope" (STARS writes base == M)
         return intervals
     return intervals + [Interval(base, m_total, "conv")]
+
+
+def unknown_regions(
+    conv, M, *, conv_env=None, eps: float = 1e-4
+) -> list[tuple[float, float] | None]:
+    """For each row, the mass range whose structure is *not in the file*:
+    None for normal rows; for truncated rows (all 12 slots used) the range
+    from the outermost reported boundary up to the restored envelope base
+    (when `conv_env` supplies one below the surface and above that boundary)
+    or otherwise the surface.
+    """
+    out: list[tuple[float, float] | None] = []
+    for i, (row, m_total) in enumerate(zip(conv, M)):
+        m_total = float(m_total)
+        pairs = _boundaries(row, m_total, eps)
+        if len(pairs) < _SLOTS:
+            out.append(None)
+            continue
+        lo = pairs[-1][0]
+        hi = m_total
+        if conv_env is not None:
+            base = float(conv_env[i])
+            if base == base and lo < base < m_total - eps:
+                hi = base
+        out.append((lo, hi))
+    return out

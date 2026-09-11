@@ -13,7 +13,7 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
 import pytest
-from matplotlib.collections import PathCollection, QuadMesh
+from matplotlib.collections import PathCollection, PolyCollection, QuadMesh
 from matplotlib.lines import Line2D
 
 from kipp.render import _strictly_increasing, plot_kippenhahn
@@ -261,3 +261,43 @@ def test_precomputed_intervals_skip_decoding(monkeypatch):
     intervals = [[] for _ in range(len(synthetic_data["M"]))]
     ax = plot_kippenhahn(synthetic_data, intervals_per_model=intervals)
     assert ax is not None
+
+
+# --- polish: layout and unknown-region bands ----------------------------------
+
+
+def _twelve_central_shells():
+    return [0.00608, -0.00341, 0.0183, -0.01831, 0.04689, -0.04687,
+            0.15772, -0.15773, 0.23986, -0.23985, 0.35412, -0.35413]
+
+
+def test_legend_sits_below_the_axes():
+    ax = plot_kippenhahn(_make_data())
+    leg = ax.get_legend()
+    bb = leg.get_bbox_to_anchor().transformed(ax.transAxes.inverted())
+    assert bb.y1 <= 0.0
+
+
+def test_co_core_fill_is_drawn_beneath_the_shading():
+    ax = plot_kippenhahn(_make_data())
+    meshes = _quadmeshes(ax)
+    fills = [c for c in ax.collections if isinstance(c, PolyCollection)]
+    assert fills, "CO core fill missing"
+    assert max(f.get_zorder() for f in fills) < min(m.get_zorder() for m in meshes)
+
+
+def test_default_title_names_the_zams_mass():
+    ax = plot_kippenhahn(_make_data())
+    assert "10.0" in ax.get_title()
+
+
+def test_truncated_rows_get_an_unknown_band_mesh():
+    data = _make_data()
+    data["conv"][2] = _twelve_central_shells()
+    data["M"][:] = 17.18642
+    data["conv"][[0, 1, 3, 4, 5], 2:] = 17.18642 * np.tile([1, -1], 5)
+    data["conv_env"] = np.full(6, 7.757)
+    n_without = len(_quadmeshes(plot_kippenhahn(_make_data())))
+    ax = plot_kippenhahn(data)
+    assert len(_quadmeshes(ax)) == n_without + 1
+    assert any("not in file" in t.get_text().lower() for t in ax.get_legend().get_texts())

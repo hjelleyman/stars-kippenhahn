@@ -361,3 +361,38 @@ def test_restore_skips_rows_whose_envelope_was_already_decoded():
                         conv_env=np.array([7.7574]))
     conv = [(round(i.lo, 3), round(i.hi, 3)) for i in ivs[0] if i.kind == "conv"]
     assert conv == [(5.038, 6.352), (6.37, 7.29), (7.758, 17.155)]
+
+
+# --- unknown regions on truncated rows ---------------------------------------
+
+
+def test_unknown_regions_none_for_normal_rows():
+    from kipp.decode import unknown_regions
+    conv = np.array([[3.0, -3.5] + [10.0, -10.0] * 5])
+    assert unknown_regions(conv, np.array([10.0])) == [None]
+
+
+def test_unknown_region_spans_last_boundary_to_surface_when_no_envelope():
+    from kipp.decode import unknown_regions
+    conv = np.array([_twelve_central_shells()])
+    (region,) = unknown_regions(conv, np.array([17.18642]))
+    assert region == (0.35413, 17.18642)
+
+
+def test_unknown_region_stops_at_restored_envelope_base():
+    from kipp.decode import unknown_regions
+    conv = np.array([_twelve_central_shells()])
+    (region,) = unknown_regions(conv, np.array([17.18642]),
+                                conv_env=np.array([7.757]))
+    assert region == (0.35413, 7.757)
+
+
+def test_unknown_region_absent_when_envelope_already_decoded():
+    from kipp.decode import unknown_regions
+    # real row 3500: truncation removed only the thin radiative skin above
+    # the envelope; what is missing is above 17.15507.
+    row = [5.03828, -5.0383, 6.35398, -6.35212, 6.35411, -6.37025, 7.29116,
+           -7.2903, 7.75741, -7.75768, 17.15507, -17.15498]
+    (region,) = unknown_regions(np.array([row]), np.array([17.1864]),
+                                conv_env=np.array([7.7574]))
+    assert region == (17.15507, 17.1864)

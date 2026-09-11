@@ -13,7 +13,7 @@ import numpy as np
 from matplotlib.colors import ListedColormap
 from matplotlib.patches import Patch
 
-from kipp.decode import decode_all
+from kipp.decode import Interval, decode_all, unknown_regions
 from kipp.rasterise import rasterise, time_edges
 
 __all__ = ["plot_kippenhahn"]
@@ -105,11 +105,22 @@ def plot_kippenhahn(
     CO_core = np.asarray(data["CO_core"], dtype=float)
     m_max = float(M.max()) * 1.001
 
+    conv_env = data.get("conv_env")
     if intervals_per_model is None:
         intervals_per_model, _bad_rows = decode_all(
-            data["conv"], M, conv_env=data.get("conv_env")
+            data["conv"], M, conv_env=conv_env
         )
     m_edges, conv, semi = rasterise(intervals_per_model, m_max=m_max, n_mass=n_mass)
+
+    # STARS reports at most 12 boundaries; where a row used all of them the
+    # structure above the last one is simply absent from the file. Rasterise
+    # those ranges (as pseudo-"conv" intervals, so rasterise can be reused)
+    # into a separate mask drawn as a hatched "not in file" band.
+    unknown = [
+        [Interval(rng[0], rng[1], "conv")] if rng else []
+        for rng in unknown_regions(data["conv"], M, conv_env=conv_env)
+    ]
+    _, unknown_mask, _ = rasterise(unknown, m_max=m_max, n_mass=n_mass)
 
     if not semiconv:
         conv = conv | semi
@@ -125,6 +136,17 @@ def plot_kippenhahn(
         _fig, ax = plt.subplots()
 
     legend_handles: list[Any] = []
+
+    ax.fill_between(x, 0, CO_core, color="0.75", alpha=0.6, zorder=0.5)
+    legend_handles.append(Patch(color="0.75", alpha=0.6, label="CO core"))
+
+    if unknown_mask.any():
+        masked = np.ma.masked_where(~unknown_mask, np.ones_like(unknown_mask, dtype=float))
+        ax.pcolormesh(
+            x_edges, m_edges, masked.T, shading="flat",
+            cmap=ListedColormap(["0.92"]), rasterized=True, zorder=0.6,
+        )
+        legend_handles.append(Patch(color="0.92", label="Not in file (12-boundary limit)"))
 
     if semiconv:
         semi_mask = np.ma.masked_where(~semi, np.ones_like(semi, dtype=float))
@@ -150,11 +172,6 @@ def plot_kippenhahn(
         zorder=2,
     )
     legend_handles.append(Patch(color=conv_color, label="Convective"))
-
-    ax.fill_between(
-        x, 0, CO_core, color="0.7", alpha=0.5, zorder=3, label="CO core"
-    )
-    legend_handles.append(Patch(color="0.7", alpha=0.5, label="CO core"))
 
     (he_line,) = ax.plot(
         x, He_core, color="0.3", linestyle="--", zorder=4, label="He core"
@@ -189,8 +206,13 @@ def plot_kippenhahn(
     ax.set_xlim(min(lo, hi), max(lo, hi))
     if invert:
         ax.invert_xaxis()
-    if title is not None:
-        ax.set_title(title)
-    ax.legend(handles=legend_handles, loc="upper right")
+    if title is None:
+        title = rf"$M_{{\rm ZAMS}} = {M[0]:.1f}\,$M$_\odot$"
+    ax.set_title(title)
+    ax.legend(
+        handles=legend_handles, loc="upper center", bbox_to_anchor=(0.5, -0.14),
+        ncol=3, frameon=False, fontsize="small",
+    )
+    ax.figure.tight_layout()
 
     return ax
