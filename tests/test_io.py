@@ -48,7 +48,7 @@ def test_load_plot_basic_fields_and_shapes(tmp_path):
 
     data = load_plot(path)
 
-    assert set(data.keys()) == {"model", "age", "M", "He_core", "CO_core", "conv"}
+    assert set(data.keys()) == {"model", "age", "M", "He_core", "CO_core", "conv", "conv_env"}
     for key in ("model", "age", "M", "He_core", "CO_core"):
         arr = data[key]
         assert isinstance(arr, np.ndarray)
@@ -117,3 +117,43 @@ def test_load_plot_real_data_sanity():
     assert data["model"].shape == (3704,)
     assert data["conv"].shape == (3704, 12)
     assert data["M"][0] == pytest.approx(20.73143)
+
+
+# --- convective-envelope base column (col 71, 0-indexed 70) -----------------
+
+
+def _line(vals, ncols=74):
+    out = list(vals) + [0.0] * (ncols - len(vals))
+    return " ".join(f"{v:.5f}" if isinstance(v, float) else str(v) for v in out)
+
+
+def test_conv_env_column_is_loaded(tmp_path):
+    p = tmp_path / "plot"
+    vals = [1, 0.0, 0, 0, 0, 10.0] + [0.0] * 17
+    row = [0.0] * 74
+    row[:23] = vals
+    row[70] = 7.5
+    p.write_text(_line(row) + "\n" + _line(row) + "\n")
+    d = load_plot(p)
+    assert "conv_env" in d
+    np.testing.assert_allclose(d["conv_env"], [7.5, 7.5])
+
+
+def test_conv_env_recovers_from_fixed_width_overflow(tmp_path):
+    # STARS writes fixed-width fields; R_conv-env > 100 runs into the previous
+    # field, yielding tokens like '19.83829100.25554'. The first 5-decimal
+    # number is M_conv-env and must be recovered; the line then has 73 tokens.
+    p = tmp_path / "plot"
+    fields = [f"{v:.5f}" for v in ([1, 0.0, 0, 0, 0, 19.84] + [0.0] * 68)]
+    fields[70] = "19.83829100.25554"   # merged col 71 + col 72
+    fields = fields[:73]
+    p.write_text(" ".join(fields) + "\n")
+    d = load_plot(p)
+    np.testing.assert_allclose(d["conv_env"], [19.83829])
+
+
+def test_conv_env_missing_column_is_nan(tmp_path):
+    p = tmp_path / "plot"
+    p.write_text(_line([1, 0.0, 0, 0, 0, 10.0] + [0.0] * 17, ncols=23) + "\n")
+    d = load_plot(p)
+    assert np.isnan(d["conv_env"]).all()

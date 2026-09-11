@@ -18,9 +18,31 @@ from dataclasses import dataclass
 from itertools import permutations
 from typing import Iterable, Sequence
 
-__all__ = ["Interval", "DecodeError", "decode_row", "decode_all"]
+__all__ = ["Interval", "DecodeError", "decode_row", "decode_all", "is_truncated"]
 
 _STATES = ("rad", "semi", "conv")
+_SLOTS = 12
+
+
+def _boundaries(values: Iterable[float], m_total: float, eps: float) -> list[tuple[float, int]]:
+    """(|m|, sign) for every non-padding entry, sorted by |m|. Padding is
+    0.0 or +/-m_total (within eps)."""
+    pairs: list[tuple[float, int]] = []
+    for raw in values:
+        v = float(raw)
+        av = abs(v)
+        if av < eps or av >= m_total - eps:
+            continue
+        pairs.append((av, 1 if v > 0 else -1))
+    pairs.sort(key=lambda p: p[0])
+    return pairs
+
+
+def is_truncated(values: Iterable[float], m_total: float, eps: float = 1e-4) -> bool:
+    """True if every one of the 12 slots holds a real boundary, i.e. the
+    star has more boundaries than STARS can report and the outer ones are
+    missing."""
+    return len(_boundaries(values, m_total, eps)) == _SLOTS
 
 
 @dataclass(frozen=True)
@@ -113,14 +135,11 @@ def decode_row(
     Raises DecodeError if no start state (rad/semi/conv) and no tie ordering
     produces a fully legal walk through the non-padding boundary values.
     """
-    pairs: list[tuple[float, int]] = []
-    for raw in values:
-        v = float(raw)
-        av = abs(v)
-        if av < eps or av >= m_total - eps:
-            continue
-        pairs.append((av, 1 if v > 0 else -1))
-    pairs.sort(key=lambda p: p[0])
+    pairs = _boundaries(values, m_total, eps)
+    # STARS reports at most 12 boundaries. When every slot is in use the
+    # list has been cut off at the outside, so the region above the last
+    # boundary is unknown rather than "whatever state the walk ends in".
+    truncated = len(pairs) == _SLOTS
     groups = _tie_groups(pairs, tie_tol)
 
     walked = None
@@ -135,6 +154,8 @@ def decode_row(
 
     states = [start] + [st for _, _, st in walked]
     boundaries = [0.0] + [av for av, _, _ in walked] + [m_total]
+    if truncated:
+        states = states[:-1]
 
     intervals: list[Interval] = []
     for i, state in enumerate(states):
@@ -150,12 +171,20 @@ def decode_all(
     conv,
     M,
     *,
+    conv_env=None,
     eps: float = 1e-4,
     prefer: str = "conv",
     on_error: str = "skip",
 ) -> tuple[list[list[Interval]], list[int]]:
     """Decode every row of `conv` (shape (n_models, 12)) against the matching
     total mass in `M` (length n_models).
+
+    `conv_env` (optional, length n_models): mass coordinate of the base of
+    the convective envelope, from the plot file's M_conv-env column. It is
+    used only for truncated rows (all 12 slots in use), where the envelope
+    boundaries have fallen off the end of the list; a finite value below
+    `M - eps` restores the envelope as a conv interval up to the surface.
+    Non-truncated rows trust the boundary columns alone.
 
     `on_error="skip"`: a row that fails to decode contributes `[]` to the
     result and its index is appended to `bad_rows`.
@@ -168,11 +197,36 @@ def decode_all(
     results: list[list[Interval]] = []
     bad_rows: list[int] = []
     for i, (row, m_total) in enumerate(zip(conv, M)):
+        m_total = float(m_total)
         try:
-            results.append(decode_row(row, float(m_total), eps=eps, prefer=prefer))
+            intervals = decode_row(row, m_total, eps=eps, prefer=prefer)
         except DecodeError as exc:
             if on_error == "raise":
                 raise DecodeError(f"row {i}: {exc}") from exc
             results.append([])
             bad_rows.append(i)
+            continue
+        if conv_env is not None and is_truncated(row, m_total, eps):
+            intervals = _restore_envelope(intervals, float(conv_env[i]), m_total, eps)
+        results.append(intervals)
     return results, bad_rows
+
+
+def _restore_envelope(
+    intervals: list[Interval], base: float, m_total: float, eps: float,
+    tol: float = 0.5,
+) -> list[Interval]:
+    """Append a conv interval [base, m_total) if the envelope whose base is
+    `base` fell off the end of the truncated list. If a decoded conv
+    interval already starts at or above `base - tol`, the envelope is
+    present and nothing is added. The boundary columns are authoritative
+    where they exist, so a restored envelope starts no lower than the last
+    decoded interval."""
+    if not (base == base):   # nan: column unavailable
+        return intervals
+    if any(iv.kind == "conv" and iv.lo >= base - tol for iv in intervals):
+        return intervals
+    base = max(base, max((iv.hi for iv in intervals), default=0.0))
+    if base >= m_total - eps:   # "no envelope" (STARS writes base == M)
+        return intervals
+    return intervals + [Interval(base, m_total, "conv")]

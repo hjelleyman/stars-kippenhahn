@@ -11,6 +11,7 @@ arithmetic slip about which entries count as padding. The corrected version
 see the comment on test_post_ms_row for the full derivation.
 """
 import dataclasses
+import numpy as np
 
 import pytest
 
@@ -289,3 +290,74 @@ def test_near_tie_within_print_precision_is_treated_as_tie():
 def test_genuinely_illegal_row_still_raises():
     with pytest.raises(DecodeError):
         decode_row([3.0, -5.0, 7.0], 10.0)
+
+
+# --- truncation: all 12 slots in use -----------------------------------------
+# STARS can only report 12 boundaries. Late in the evolution the star has
+# more, and the list is cut off at the outside. The region above the last
+# reported boundary is then unknown and must not be extended to the surface.
+
+
+def _twelve_central_shells():
+    # six thin conv skins near the centre, all 12 slots used, walk ends conv
+    return [0.00608, -0.00341, 0.0183, -0.01831, 0.04689, -0.04687,
+            0.15772, -0.15773, 0.23986, -0.23985, 0.35412, -0.35413]
+
+
+def test_truncated_row_does_not_extend_to_surface():
+    out = decode_row(_twelve_central_shells(), 17.18642)
+    assert out, "central shells must still be decoded"
+    assert max(i.hi for i in out) < 1.0
+
+
+def test_full_row_that_ends_radiative_is_unaffected():
+    vals = [1.0, -1.1, -2.0, 2.1, 3.0, -3.1, -4.0, 4.1, 5.0, -5.1, -6.0, 6.1]
+    out = decode_row(vals, 10.0)
+    assert [(i.lo, i.hi) for i in out if i.kind == "conv"] == [
+        (1.1, 2.0), (3.1, 4.0), (5.1, 6.0)]
+
+
+def test_non_truncated_row_still_extends_to_surface():
+    out = decode_row([3.0, -3.5, 10.0, -10.0, 10.0, -10.0], 10.0)
+    assert out[-1] == Interval(3.5, 10.0, "conv")
+
+
+def test_decode_all_restores_envelope_on_truncated_rows_from_conv_env():
+    conv = np.array([_twelve_central_shells(),
+                     [3.0, -3.5] + [10.0, -10.0] * 5])
+    M = np.array([17.18642, 10.0])
+    conv_env = np.array([7.757, 3.0])   # base of convective envelope
+    ivs, bad = decode_all(conv, M, conv_env=conv_env)
+    assert bad == []
+    assert ivs[0][-1] == Interval(7.757, 17.18642, "conv")
+    # non-truncated rows trust the boundary columns, not conv_env
+    assert ivs[1][-1] == Interval(3.5, 10.0, "conv")
+
+
+def test_decode_all_ignores_conv_env_when_no_envelope_or_nan():
+    conv = np.array([_twelve_central_shells()] * 2)
+    M = np.array([17.18642, 17.18642])
+    conv_env = np.array([17.18642, np.nan])   # == M means "no envelope"
+    ivs, _ = decode_all(conv, M, conv_env=conv_env)
+    assert all(max(i.hi for i in r) < 1.0 for r in ivs)
+
+
+def test_restored_envelope_is_clipped_to_top_of_decoded_intervals():
+    # conv_env sits a hair below the last decoded skin (real row 3033):
+    # the boundary columns win and the envelope starts where they end.
+    row = [0.01865, -0.01865, 0.0187, -0.01872, 0.27064, -0.27058,
+           5.38347, -5.38378, 7.07116, -7.0691, 7.75921, -7.75946]
+    ivs, _ = decode_all(np.array([row]), np.array([17.18666]),
+                        conv_env=np.array([7.75935]))
+    assert ivs[0][-1] == Interval(7.75946, 17.18666, "conv")
+
+
+def test_restore_skips_rows_whose_envelope_was_already_decoded():
+    # real row 3500: envelope conv(7.758, 17.155) is in the columns; the
+    # truncation only removed the radiative skin above it. Nothing to add.
+    row = [5.03828, -5.0383, 6.35398, -6.35212, 6.35411, -6.37025, 7.29116,
+           -7.2903, 7.75741, -7.75768, 17.15507, -17.15498]
+    ivs, _ = decode_all(np.array([row]), np.array([17.1864]),
+                        conv_env=np.array([7.7574]))
+    conv = [(round(i.lo, 3), round(i.hi, 3)) for i in ivs[0] if i.kind == "conv"]
+    assert conv == [(5.038, 6.352), (6.37, 7.29), (7.758, 17.155)]
