@@ -6,8 +6,23 @@ build-backend = "setuptools.build_meta"
 name = "kipp"
 version = "0.1.0"
 description = "Shaded Kippenhahn diagrams from Cambridge STARS plot files"
+readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
+authors = [{ name = "Hamish Jelleyman" }]
 requires-python = ">=3.11"
 dependencies = ["numpy", "matplotlib"]
+keywords = ["astrophysics", "stellar-evolution", "STARS", "Kippenhahn"]
+classifiers = [
+  "Development Status :: 4 - Beta",
+  "Intended Audience :: Science/Research",
+  "Programming Language :: Python :: 3",
+  "Topic :: Scientific/Engineering :: Astronomy",
+]
+
+[project.urls]
+Homepage = "https://github.com/hjelleyman/stars-kippenhahn"
+Issues = "https://github.com/hjelleyman/stars-kippenhahn/issues"
 
 [project.optional-dependencies]
 test = ["pytest"]

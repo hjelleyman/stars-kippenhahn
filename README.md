@@ -1,5 +1,8 @@
 # kipp — shaded Kippenhahn diagrams from STARS `plot` files
 
+[![tests](https://github.com/hjelleyman/stars-kippenhahn/actions/workflows/tests.yml/badge.svg)](https://github.com/hjelleyman/stars-kippenhahn/actions/workflows/tests.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+
 Turns the `M_conv1..12` boundary columns of a Cambridge STARS `plot` file into
 filled convective / semiconvective regions on a (time × mass) diagram.
 No Kaitiaki dependency (numpy + matplotlib only), but it slots into Kaitiaki
@@ -139,3 +142,9 @@ tests/             111 tests; test_integration.py needs data/plot.*
 
 Everything is a pure function; the rendering never calls `plt.show()` except
 the CLI without `-o`.
+
+## Contributing and licence
+
+Issues and PRs welcome — see [CONTRIBUTING.md](CONTRIBUTING.md). Plot files
+from other runs that decode badly are the most useful thing you can send.
+MIT licensed; see [LICENSE](LICENSE).
